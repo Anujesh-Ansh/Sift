@@ -8,8 +8,17 @@ import 'screenshot_analyzer.dart';
 
 /// Production Gemini Multimodal Vision implementation using google_generative_ai SDK.
 class GeminiAnalyzerImpl implements ScreenshotAnalyzer {
-  final GenerativeModel _model;
+  final String _apiKey;
+  final String _preferredModel;
+  final GenerativeModel? _customModel;
   static const _logger = AppLogger('GeminiAnalyzerImpl');
+
+  static const List<String> _candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash',
+  ];
 
   static const _analysisPrompt = '''
 You are an intelligent screenshot analyzer for Project Sift.
@@ -28,46 +37,89 @@ Respond ONLY with the raw JSON object. Do not include markdown code fences or ex
     required String apiKey,
     String modelName = AppConstants.defaultGeminiModel,
     GenerativeModel? model,
-  }) : _model = model ??
-            GenerativeModel(
-              model: modelName,
-              apiKey: apiKey,
-              generationConfig: GenerationConfig(
-                responseMimeType: 'application/json',
-                temperature: 0.2,
-              ),
-            );
+  })  : _apiKey = apiKey,
+        _preferredModel = modelName,
+        _customModel = model;
 
   @override
   Future<AnalysisResult> analyzeScreenshot({
     required Uint8List imageBytes,
     String mimeType = 'image/jpeg',
   }) async {
+    final content = [
+      Content.multi([
+        TextPart(_analysisPrompt),
+        DataPart(mimeType, imageBytes),
+      ]),
+    ];
+
+    if (_customModel != null) {
+      return _generateWithModel(_customModel, content, _preferredModel);
+    }
+
+    final modelsToTry = [
+      _preferredModel,
+      ..._candidateModels.where((m) => m != _preferredModel),
+    ];
+
+    GenerativeAIException? lastException;
+
+    for (final modelCode in modelsToTry) {
+      try {
+        _logger.d(
+            'Attempting multimodal analysis with model: $modelCode (${imageBytes.lengthInBytes} bytes)');
+        final model = GenerativeModel(
+          model: modelCode,
+          apiKey: _apiKey,
+          generationConfig: GenerationConfig(
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          ),
+        );
+
+        return await _generateWithModel(model, content, modelCode);
+      } on GenerativeAIException catch (e) {
+        lastException = e;
+        if (e.message.contains('not found') ||
+            e.message.contains('not supported')) {
+          _logger.w(
+              'Model $modelCode unavailable on API version. Trying next candidate...');
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    if (lastException != null) {
+      throw AiAnalysisFailure(
+        'All candidate Gemini models failed. Last error: ${lastException.message}',
+        cause: lastException,
+      );
+    }
+
+    return AnalysisResult.fallback();
+  }
+
+  Future<AnalysisResult> _generateWithModel(
+    GenerativeModel model,
+    List<Content> content,
+    String modelCode,
+  ) async {
     try {
-      _logger.d(
-          'Sending ${imageBytes.lengthInBytes} bytes to Gemini for multimodal analysis');
-
-      final content = [
-        Content.multi([
-          TextPart(_analysisPrompt),
-          DataPart(mimeType, imageBytes),
-        ]),
-      ];
-
-      final response = await _model.generateContent(content);
+      final response = await model.generateContent(content);
       final responseText = response.text;
 
       if (responseText == null || responseText.trim().isEmpty) {
         _logger.w(
-            'Gemini returned an empty response. Falling back to default result.');
+            'Gemini returned an empty response ($modelCode). Falling back to default result.');
         return AnalysisResult.fallback();
       }
 
       _logger.i(
-          'Received successful response from Gemini (${responseText.length} chars)');
+          'Received successful response from Gemini ($modelCode, ${responseText.length} chars)');
       return AiResponseParser.parse(responseText);
     } on GenerativeAIException catch (e, st) {
-      _logger.e('GenerativeAIException during analysis: ${e.message}', e, st);
+      _logger.e('GenerativeAIException during analysis with $modelCode: ${e.message}', e, st);
       final isQuota = e.message.toLowerCase().contains('quota') ||
           e.message.toLowerCase().contains('rate limit') ||
           e.message.toLowerCase().contains('429');
@@ -77,7 +129,7 @@ Respond ONLY with the raw JSON object. Do not include markdown code fences or ex
         cause: e,
       );
     } catch (e, st) {
-      _logger.e('Unexpected error during Gemini analysis: $e', e, st);
+      _logger.e('Unexpected error during Gemini analysis with $modelCode: $e', e, st);
       if (e is Failure) rethrow;
       throw AiAnalysisFailure('Failed to analyze screenshot: $e', cause: e);
     }
