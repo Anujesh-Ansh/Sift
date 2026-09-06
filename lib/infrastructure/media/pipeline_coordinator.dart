@@ -38,16 +38,7 @@ class PipelineCoordinator {
     _logger.i(
         'Starting pipeline coordination for item ${item.id} (user: $userId)');
 
-    // 1. Upload media to Storage
-    _logger.d('Uploading compressed images to storage for ${item.id}');
-    final uploadedPaths = await _storageService.uploadScreenshotMedia(
-      userId: userId,
-      screenshotId: item.id,
-      imageFile: media.compressedImageFile,
-      thumbnailFile: media.thumbnailFile,
-    );
-
-    // 2. Multimodal AI Analysis
+    // 1. Multimodal AI Analysis (performed directly on local image bytes)
     _logger.d('Running Gemini multimodal analysis for ${item.id}');
     AnalysisResult analysis;
     try {
@@ -67,6 +58,24 @@ class PipelineCoordinator {
       );
     }
 
+    // 2. Upload media to Storage (with graceful offline / local-first fallback)
+    _logger.d('Uploading compressed images to storage for ${item.id}');
+    String imagePath = 'file://${media.compressedImageFile.path}';
+    String thumbPath = 'file://${media.thumbnailFile.path}';
+    try {
+      final uploadedPaths = await _storageService.uploadScreenshotMedia(
+        userId: userId,
+        screenshotId: item.id,
+        imageFile: media.compressedImageFile,
+        thumbnailFile: media.thumbnailFile,
+      );
+      imagePath = uploadedPaths.imagePath;
+      thumbPath = uploadedPaths.thumbnailPath;
+    } catch (e) {
+      _logger.w(
+          'Cloud storage upload failed or unconfigured ($e). Falling back to local device paths.');
+    }
+
     // 3. Human-In-The-Loop Routing
     final isReviewRequired = analysis.needsHumanContext;
     final finalItem = item.copyWith(
@@ -80,16 +89,21 @@ class PipelineCoordinator {
       processingStatus: isReviewRequired
           ? ProcessingStatus.reviewRequired
           : ProcessingStatus.completed,
-      storagePath: uploadedPaths.imagePath,
-      thumbnailStoragePath: uploadedPaths.thumbnailPath,
+      storagePath: imagePath,
+      thumbnailStoragePath: thumbPath,
+      localThumbnailPath: media.thumbnailFile.path,
       modelVersion: AppConstants.defaultGeminiModel,
       updatedAt: DateTime.now(),
     );
 
-    // 4. Save to Firestore
+    // 4. Save to Repository (local store & cloud Firestore)
     _logger.i(
-        'Saving enriched screenshot document ${item.id} to Firestore (Status: ${finalItem.processingStatus.label})');
-    await _repository.saveScreenshot(finalItem);
+        'Saving enriched screenshot document ${item.id} (Status: ${finalItem.processingStatus.label})');
+    try {
+      await _repository.saveScreenshot(finalItem);
+    } catch (e, st) {
+      _logger.w('Repository save had error ($e).', e, st);
+    }
 
     return finalItem;
   }

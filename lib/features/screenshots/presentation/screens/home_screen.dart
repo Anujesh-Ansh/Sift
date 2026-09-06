@@ -220,6 +220,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
+    final category = ref.watch(selectedCategoryFilterProvider);
+    final isCategoryFiltered = category != 'All';
+
     return ListView(
       children: [
         SizedBox(height: MediaQuery.of(context).size.height * 0.15),
@@ -234,30 +237,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.darkBorder),
                 ),
-                child: const Icon(
-                  Icons.photo_library_outlined,
+                child: Icon(
+                  isCategoryFiltered
+                      ? Icons.filter_alt_off_outlined
+                      : Icons.photo_library_outlined,
                   size: 48,
                   color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              const Text('No Screenshots Found',
-                  style: AppTypography.titleLarge),
+              Text(
+                isCategoryFiltered
+                    ? 'No "$category" Screenshots'
+                    : 'No Screenshots Found',
+                style: AppTypography.titleLarge,
+              ),
               const SizedBox(height: AppSpacing.sm),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
                 child: Text(
-                  'Tap "Sync Media" below or grant photo permissions in Settings to organize screenshots.',
+                  isCategoryFiltered
+                      ? 'No screenshots have been classified as "$category" yet. Try viewing All or switch categories.'
+                      : 'Tap "Sync Media" below or grant photo permissions in Settings to organize screenshots.',
                   style: AppTypography.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
-                onPressed: _triggerSync,
-                icon: const Icon(Icons.sync),
-                label: const Text('Scan Device Now'),
-              ),
+              if (isCategoryFiltered)
+                FilledButton.icon(
+                  onPressed: () {
+                    ref.read(selectedCategoryFilterProvider.notifier).state =
+                        'All';
+                  },
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Show All Screenshots'),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: _triggerSync,
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Scan Device Now'),
+                ),
             ],
           ),
         ),

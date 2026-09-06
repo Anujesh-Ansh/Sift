@@ -18,13 +18,61 @@ class ProcessingIndicatorBanner extends ConsumerWidget {
             .where((item) => item.processingStatus.isProcessing)
             .toList();
 
-        if (processingItems.isEmpty) {
+        final failedItems = items.values
+            .where((item) => item.processingStatus.isFailure)
+            .toList();
+
+        if (processingItems.isEmpty && failedItems.isEmpty) {
           return const SizedBox.shrink();
         }
 
-        final count = processingItems.length;
-        final currentStage = processingItems.first.processingStatus.label;
+        if (processingItems.isNotEmpty) {
+          final count = processingItems.length;
+          final currentStage = processingItems.first.processingStatus.label;
 
+          return Container(
+            margin: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: AppSpacing.roundedMd,
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    'Processing $count screenshot${count > 1 ? 's' : ''} ($currentStage)...',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Show failed notification if failures exist
+        final failedCount = failedItems.length;
         return Container(
           margin: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
@@ -35,26 +83,20 @@ class ProcessingIndicatorBanner extends ConsumerWidget {
             vertical: AppSpacing.sm,
           ),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.12),
+            color: AppColors.error.withValues(alpha: 0.12),
             borderRadius: AppSpacing.roundedMd,
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
           ),
           child: Row(
             children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
-              ),
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppColors.error, size: 20),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
-                  'Processing $count screenshot${count > 1 ? 's' : ''} ($currentStage)...',
+                  '$failedCount screenshot failed to process. Check network or API key in Settings.',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.primaryLight,
+                    color: AppColors.error,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
