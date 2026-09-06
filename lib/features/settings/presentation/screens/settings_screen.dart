@@ -42,7 +42,7 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: Switch(
                     value: true,
                     onChanged: (val) {},
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                   ),
                 ),
                 const Divider(height: 1, indent: 56),
