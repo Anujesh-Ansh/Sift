@@ -7,6 +7,7 @@ import '../../../infrastructure/media/photo_manager_screenshot_source.dart';
 import '../../../infrastructure/media/processing_queue.dart';
 import '../../../infrastructure/media/screenshot_source.dart';
 import '../domain/entities/screenshot_item.dart';
+import 'gemini_providers.dart';
 
 final mediaPermissionServiceProvider = Provider<MediaPermissionService>((ref) {
   return MediaPermissionService();
@@ -28,11 +29,13 @@ final processingQueueProvider = Provider<ProcessingQueue>((ref) {
   final source = ref.watch(screenshotSourceProvider);
   final preprocessor = ref.watch(localPreprocessorProvider);
   final dedup = ref.watch(deduplicationServiceProvider);
+  final coordinator = ref.watch(pipelineCoordinatorProvider);
 
   final queue = ProcessingQueue(
     source: source,
     preprocessor: preprocessor,
     dedupService: dedup,
+    onProcessItem: (item, media) => coordinator.processItem(item, media),
   );
 
   ref.onDispose(() => queue.dispose());
