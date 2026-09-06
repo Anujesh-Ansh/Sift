@@ -19,10 +19,15 @@ class LocalPreprocessor {
   }) async {
     try {
       final tempDir = await getTemporaryDirectory();
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final thumbDir = Directory('${appDocDir.path}/sift_thumbnails');
+      if (!thumbDir.existsSync()) {
+        await thumbDir.create(recursive: true);
+      }
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final compressedImagePath =
           '${tempDir.path}/${assetId}_opt_$timestamp.jpg';
-      final thumbnailPath = '${tempDir.path}/${assetId}_thumb_$timestamp.jpg';
+      final thumbnailPath = '${thumbDir.path}/${assetId}_thumb.jpg';
 
       _logger.d(
           'Compressing image: ${sourceFile.path} (target max dim: ${AppConstants.maxImageDimension})');
@@ -90,10 +95,15 @@ class LocalPreprocessor {
   }) async {
     try {
       final tempDir = await getTemporaryDirectory();
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final thumbDir = Directory('${appDocDir.path}/sift_thumbnails');
+      if (!thumbDir.existsSync()) {
+        await thumbDir.create(recursive: true);
+      }
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final compressedImagePath =
           '${tempDir.path}/${assetId}_bopt_$timestamp.jpg';
-      final thumbnailPath = '${tempDir.path}/${assetId}_bthumb_$timestamp.jpg';
+      final thumbnailPath = '${thumbDir.path}/${assetId}_bthumb.jpg';
 
       final compressedBytes = await FlutterImageCompress.compressWithList(
         rawBytes,

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_typography.dart';
@@ -189,6 +191,8 @@ class ScreenshotCard extends StatelessWidget {
     );
   }
 
+  static final Map<String, Uint8List?> _thumbnailMemoryCache = {};
+
   Widget _buildThumbnail() {
     if (item.localThumbnailPath != null &&
         item.localThumbnailPath!.isNotEmpty) {
@@ -197,12 +201,60 @@ class ScreenshotCard extends StatelessWidget {
         return Image.file(
           file,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+          errorBuilder: (_, __, ___) => _buildAssetThumbnail(),
         );
       }
     }
 
-    return _buildPlaceholder();
+    return _buildAssetThumbnail();
+  }
+
+  Widget _buildAssetThumbnail() {
+    if (item.sourceAssetId.isEmpty) {
+      return _buildPlaceholder();
+    }
+
+    if (_thumbnailMemoryCache.containsKey(item.sourceAssetId)) {
+      final cachedBytes = _thumbnailMemoryCache[item.sourceAssetId];
+      if (cachedBytes != null) {
+        return Image.memory(
+          cachedBytes,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        );
+      }
+      return _buildPlaceholder();
+    }
+
+    return FutureBuilder<Uint8List?>(
+      future: _fetchAssetThumbnailBytes(item.sourceAssetId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData &&
+            snapshot.data != null) {
+          return Image.memory(
+            snapshot.data!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+          );
+        }
+        return _buildPlaceholder();
+      },
+    );
+  }
+
+  Future<Uint8List?> _fetchAssetThumbnailBytes(String assetId) async {
+    try {
+      final asset = await AssetEntity.fromId(assetId);
+      final bytes = await asset?.thumbnailDataWithSize(
+        const ThumbnailSize(300, 300),
+        quality: 80,
+      );
+      _thumbnailMemoryCache[assetId] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _buildPlaceholder() {
