@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import '../../core/logging/app_logger.dart';
 import 'deduplication_service.dart';
+import 'models/screenshot_candidate.dart';
 import 'permission_service.dart';
 import 'processing_queue.dart';
 import 'screenshot_source.dart';
@@ -75,25 +76,39 @@ class DeltaSyncService with WidgetsBindingObserver {
         return 0;
       }
 
-      _logger.i('Starting foreground delta sync (since: $_lastSyncTime)...');
+      _logger.i('Starting foreground delta sync...');
 
-      // Query page 0
-      final candidates = await _source.fetchScreenshotCandidates(
-        page: 0,
-        size: 50,
-      );
+      final List<ScreenshotCandidate> allNewCandidates = [];
+      int page = 0;
+      const pageSize = 100;
+      const maxScreenshotsToSync = 500;
 
-      final newCandidates =
-          candidates.where((c) => !_dedupService.isKnownAssetId(c.id)).toList();
+      while (allNewCandidates.length < maxScreenshotsToSync) {
+        final batch = await _source.fetchScreenshotCandidates(
+          page: page,
+          size: pageSize,
+        );
 
-      if (newCandidates.isNotEmpty) {
-        _logger.i('Found ${newCandidates.length} new screenshots to enqueue.');
-        _processingQueue.enqueueCandidates(newCandidates);
+        if (batch.isEmpty) break;
+
+        final newInBatch =
+            batch.where((c) => !_dedupService.isKnownAssetId(c.id)).toList();
+        allNewCandidates.addAll(newInBatch);
+
+        // If batch has fewer items than requested, we've reached the end of the album
+        if (batch.length < pageSize) break;
+        page++;
+      }
+
+      if (allNewCandidates.isNotEmpty) {
+        _logger.i(
+            'Found ${allNewCandidates.length} new screenshots to enqueue across ${page + 1} page(s).');
+        _processingQueue.enqueueCandidates(allNewCandidates);
       } else {
         _logger.d('No new screenshots detected.');
       }
 
-      return newCandidates.length;
+      return allNewCandidates.length;
     } catch (e, st) {
       _logger.e('Failed during delta sync', e, st);
       return 0;

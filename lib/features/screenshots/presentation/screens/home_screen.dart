@@ -5,8 +5,10 @@ import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_typography.dart';
+import '../../providers/gemini_providers.dart';
 import '../../providers/ingestion_providers.dart';
 import '../../providers/screenshot_providers.dart';
+import '../../../settings/presentation/screens/settings_screen.dart';
 import '../widgets/category_chip_bar.dart';
 import '../widgets/processing_indicator_banner.dart';
 import '../widgets/screenshot_card.dart';
@@ -29,6 +31,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _triggerSync() async {
+    final apiKey = ref.read(geminiApiKeyProvider);
+    if (apiKey.isEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Tip: Set your Gemini API key in Settings so AI can categorize images!',
+          ),
+          backgroundColor: AppColors.warning,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Settings',
+            textColor: Colors.black,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
     final syncService = ref.read(deltaSyncServiceProvider);
     final count = await syncService.syncNow();
     if (mounted) {

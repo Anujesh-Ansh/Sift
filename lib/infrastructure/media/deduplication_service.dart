@@ -53,5 +53,11 @@ class DeduplicationService {
     }
   }
 
+  /// Clears all recorded fingerprints (enables complete re-sync & re-analysis).
+  void clear() {
+    _knownAssetIds.clear();
+    _knownContentHashes.clear();
+  }
+
   int get totalIndexedAssets => _knownAssetIds.length;
 }

@@ -33,15 +33,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
-  void _saveApiKey() {
+  Future<void> _saveApiKey() async {
     final key = _apiKeyController.text.trim();
-    ref.read(geminiApiKeyProvider.notifier).state = key;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Gemini API key saved!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+    await ref.read(geminiApiKeyProvider.notifier).setApiKey(key);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gemini API key saved & persisted to device!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
+  }
+
+  Future<void> _reanalyzeAll() async {
+    final apiKey = ref.read(geminiApiKeyProvider);
+    if (apiKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter and save your Gemini API Key first!'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    ref.read(deduplicationServiceProvider).clear();
+    final count = await ref.read(deltaSyncServiceProvider).syncNow();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Re-analyzing $count screenshots with Gemini 2.5 Vision...'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    }
   }
 
   Future<void> _reconcileDeleted() async {
@@ -128,12 +155,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         color: AppColors.accent),
                     title: Text('Gemini Multimodal Vision',
                         style: AppTypography.titleMedium),
-                    subtitle: Text('Model: gemini-1.5-flash (Structured JSON)',
+                    subtitle: Text('Model: gemini-2.5-flash (Structured JSON)',
                         style: AppTypography.bodyMedium),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'API Key (Overrides compile-time key)',
+                    'API Key (Overrides compile-time key & persists to device)',
                     style: AppTypography.labelSmall.copyWith(
                       color: AppColors.textSecondaryDark,
                     ),
@@ -166,6 +193,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Builder(builder: (context) {
+                    final key = ref.watch(geminiApiKeyProvider);
+                    if (key.isNotEmpty) {
+                      return Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded,
+                              color: AppColors.success, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Active & Saved (${key.substring(0, (key.length > 8 ? 8 : key.length))}...)',
+                            style: AppTypography.labelSmall.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: AppColors.warning, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          'No API Key Set! Screenshots will fall back to Review.',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
                 ],
               ),
             ),
@@ -175,6 +236,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading:
+                      const Icon(Icons.auto_awesome, color: AppColors.primary),
+                  title: const Text('Re-analyze All with AI',
+                      style: AppTypography.titleMedium),
+                  subtitle: const Text(
+                      'Clear cache and run Gemini 2.5 on all device screenshots',
+                      style: AppTypography.bodyMedium),
+                  onTap: _reanalyzeAll,
+                ),
+                const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.sync, color: AppColors.secondary),
                   title: const Text('Background Sync',
