@@ -18,17 +18,24 @@ class FirebaseConfig {
     if (_initialized) return;
 
     try {
-      // In development / sandbox, if no google-services is provided, initialize with fallback options
+      // Initialize Firebase with native configuration (from google-services.json)
+      // or fallback to real project options
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: const FirebaseOptions(
-            apiKey: 'mock-api-key-for-emulator-or-sandbox',
-            appId: '1:100000000000:android:mockappid',
-            messagingSenderId: '100000000000',
-            projectId: 'project-sift-sandbox',
-            storageBucket: 'project-sift-sandbox.appspot.com',
-          ),
-        );
+        try {
+          await Firebase.initializeApp();
+          _logger.i('Native Firebase initialized successfully with google-services.json');
+        } catch (nativeErr) {
+          _logger.w('Native Firebase init failed ($nativeErr), using project options fallback.');
+          await Firebase.initializeApp(
+            options: const FirebaseOptions(
+              apiKey: 'AIzaSyBa2enJuztZVHQUFm2I-nrtNFGbmVHKDDc',
+              appId: '1:602817670221:android:49f3ab302c48c60a00c004',
+              messagingSenderId: '602817670221',
+              projectId: 'gen-lang-client-0460033455',
+              storageBucket: 'gen-lang-client-0460033455.firebasestorage.app',
+            ),
+          );
+        }
       }
 
       if (useEmulators) {

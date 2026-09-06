@@ -14,10 +14,10 @@ class GeminiAnalyzerImpl implements ScreenshotAnalyzer {
   static const _logger = AppLogger('GeminiAnalyzerImpl');
 
   static const List<String> _candidateModels = [
+    'gemini-3.6-flash',
+    'gemini-flash-latest',
+    'gemini-3.5-flash',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash',
   ];
 
   static const _analysisPrompt = '''
@@ -62,7 +62,7 @@ Respond ONLY with the raw JSON object. Do not include markdown code fences or ex
       ..._candidateModels.where((m) => m != _preferredModel),
     ];
 
-    GenerativeAIException? lastException;
+    Object? lastException;
 
     for (final modelCode in modelsToTry) {
       try {
@@ -78,23 +78,17 @@ Respond ONLY with the raw JSON object. Do not include markdown code fences or ex
         );
 
         return await _generateWithModel(model, content, modelCode);
-      } on GenerativeAIException catch (e) {
+      } catch (e) {
         lastException = e;
-        if (e.message.contains('not found') ||
-            e.message.contains('not supported')) {
-          _logger.w(
-              'Model $modelCode unavailable on API version. Trying next candidate...');
-          continue;
-        }
-        rethrow;
+        _logger.w(
+            'Model $modelCode failed with: $e. Trying next candidate model...');
+        continue;
       }
     }
 
     if (lastException != null) {
-      throw AiAnalysisFailure(
-        'All candidate Gemini models failed. Last error: ${lastException.message}',
-        cause: lastException,
-      );
+      _logger.w('All candidate Gemini models failed ($lastException). Returning fallback result.');
+      return AnalysisResult.fallback();
     }
 
     return AnalysisResult.fallback();
@@ -106,7 +100,9 @@ Respond ONLY with the raw JSON object. Do not include markdown code fences or ex
     String modelCode,
   ) async {
     try {
-      final response = await model.generateContent(content);
+      final response = await model
+          .generateContent(content)
+          .timeout(const Duration(seconds: 25));
       final responseText = response.text;
 
       if (responseText == null || responseText.trim().isEmpty) {

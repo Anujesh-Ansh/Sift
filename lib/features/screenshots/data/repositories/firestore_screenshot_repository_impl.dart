@@ -193,8 +193,6 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     }
   }
 
-  static bool _firestoreWriteDisabled = false;
-
   @override
   Future<void> saveScreenshot(ScreenshotItem item) async {
     // 1. Immediately update local store
@@ -203,9 +201,9 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     _logger.i('Saved screenshot ${item.id} to local repository cache');
 
     final col = _screenshotsCol;
-    if (_firestoreWriteDisabled || col == null) return;
+    if (col == null) return;
 
-    // 2. Asynchronously synchronize to Cloud Firestore with 3s timeout
+    // 2. Asynchronously synchronize to Cloud Firestore with 5s timeout
     try {
       final dto = FirestoreScreenshotDto.fromDomain(item);
       await col
@@ -214,12 +212,11 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
             dto.toMap(),
             SetOptions(merge: true),
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 5));
       _logger.d('Successfully synchronized screenshot ${item.id} to Firestore');
     } catch (e, st) {
-      _firestoreWriteDisabled = true;
       _logger.w(
-          'Firestore cloud sync skipped or failed ($e). Activating local-first storage mode.',
+          'Firestore cloud sync for ${item.id} skipped or failed ($e). Document preserved in local-first cache.',
           e,
           st);
     }

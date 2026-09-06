@@ -4,7 +4,7 @@ class AppConstants {
 
   static const String appName = 'Project Sift';
   static const int schemaVersion = 1;
-  static const String defaultGeminiModel = 'gemini-2.5-flash';
+  static const String defaultGeminiModel = 'gemini-3.6-flash';
 
   // Target image compression constraints
   static const int maxImageDimension = 1024;

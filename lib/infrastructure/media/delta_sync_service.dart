@@ -80,23 +80,28 @@ class DeltaSyncService with WidgetsBindingObserver {
 
       final List<ScreenshotCandidate> allNewCandidates = [];
       int page = 0;
-      const pageSize = 100;
-      const maxScreenshotsToSync = 500;
+      const pageSize = 10;
+      const maxScreenshotsToSync = 10; // Testing cap: only the latest 10 screenshots
 
       while (allNewCandidates.length < maxScreenshotsToSync) {
+        final remaining = maxScreenshotsToSync - allNewCandidates.length;
+        final fetchSize = remaining < pageSize ? remaining : pageSize;
         final batch = await _source.fetchScreenshotCandidates(
           page: page,
-          size: pageSize,
+          size: fetchSize,
         );
 
         if (batch.isEmpty) break;
 
-        final newInBatch =
-            batch.where((c) => !_dedupService.isKnownAssetId(c.id)).toList();
-        allNewCandidates.addAll(newInBatch);
+        for (final c in batch) {
+          if (!_dedupService.isKnownAssetId(c.id)) {
+            allNewCandidates.add(c);
+            if (allNewCandidates.length >= maxScreenshotsToSync) break;
+          }
+        }
 
-        // If batch has fewer items than requested, we've reached the end of the album
-        if (batch.length < pageSize) break;
+        // If batch has fewer items than requested or reached cap, stop fetching
+        if (batch.length < fetchSize || allNewCandidates.length >= maxScreenshotsToSync) break;
         page++;
       }
 
