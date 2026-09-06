@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../features/review/presentation/screens/review_queue_screen.dart';
 import '../features/screenshots/presentation/screens/home_screen.dart';
+import '../features/screenshots/domain/entities/screenshot_item.dart';
+import '../features/screenshots/presentation/screens/screenshot_detail_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 
 class AppRouter {
@@ -9,6 +11,7 @@ class AppRouter {
   static const String home = '/';
   static const String review = '/review';
   static const String settings = '/settings';
+  static const String screenshotDetail = '/screenshot-detail';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -25,6 +28,12 @@ class AppRouter {
       case AppRouter.settings:
         return MaterialPageRoute(
           builder: (_) => const SettingsScreen(),
+          settings: settings,
+        );
+      case screenshotDetail:
+        final item = settings.arguments as ScreenshotItem;
+        return MaterialPageRoute(
+          builder: (_) => ScreenshotDetailScreen(item: item),
           settings: settings,
         );
       default:

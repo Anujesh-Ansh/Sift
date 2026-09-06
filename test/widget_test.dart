@@ -5,6 +5,9 @@ import 'package:project_sift/features/auth/data/firebase_auth_repository.dart';
 import 'package:project_sift/features/auth/domain/auth_user.dart';
 import 'package:project_sift/features/auth/providers/auth_provider.dart';
 
+import 'package:project_sift/features/screenshots/domain/entities/screenshot_item.dart';
+import 'package:project_sift/features/screenshots/providers/screenshot_providers.dart';
+
 class FakeAuthRepository implements AuthRepository {
   final _user = const AuthUser(id: 'test_user_123', email: 'test@sift.app');
 
@@ -28,12 +31,18 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
+          screenshotsStreamProvider
+              .overrideWith((ref) => Stream.value(<ScreenshotItem>[])),
+          reviewQueueStreamProvider
+              .overrideWith((ref) => Stream.value(<ScreenshotItem>[])),
         ],
         child: const ProjectSiftApp(),
       ),
     );
 
+    await tester.pumpAndSettle();
+
     expect(find.text('Project Sift'), findsOneWidget);
-    expect(find.text('Screenshot Intelligence'), findsOneWidget);
+    expect(find.text('No Screenshots Found'), findsOneWidget);
   });
 }

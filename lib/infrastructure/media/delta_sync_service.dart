@@ -47,6 +47,9 @@ class DeltaSyncService with WidgetsBindingObserver {
     }
   }
 
+  /// Manual trigger for syncing screenshots on user demand.
+  Future<int> syncNow() => performDeltaSync(force: true);
+
   /// Performs a paginated delta sync query.
   Future<int> performDeltaSync({bool force = false}) async {
     if (_isSyncing) {

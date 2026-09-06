@@ -45,3 +45,30 @@ final reviewQueueStreamProvider =
   final repo = ref.watch(screenshotRepositoryProvider);
   return repo.watchReviewQueue();
 });
+
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
+final filteredScreenshotsProvider =
+    Provider.autoDispose<AsyncValue<List<ScreenshotItem>>>((ref) {
+  final screenshotsAsync = ref.watch(screenshotsStreamProvider);
+  final query = ref.watch(searchQueryProvider).trim().toLowerCase();
+
+  if (query.isEmpty) return screenshotsAsync;
+
+  return screenshotsAsync.whenData((items) {
+    return items.where((item) {
+      final matchesTitle = item.title.toLowerCase().contains(query);
+      final matchesCategory =
+          item.primaryCategory.toLowerCase().contains(query);
+      final matchesTags = item.tags.any((t) => t.toLowerCase().contains(query));
+      final matchesText = item.extractedText.toLowerCase().contains(query);
+      final matchesNote = item.userNote?.toLowerCase().contains(query) ?? false;
+
+      return matchesTitle ||
+          matchesCategory ||
+          matchesTags ||
+          matchesText ||
+          matchesNote;
+    }).toList();
+  });
+});
