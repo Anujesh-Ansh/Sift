@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_typography.dart';
-import '../../../../infrastructure/ai/category_classifier.dart';
+import '../../../categories/presentation/dialogs/add_category_dialog.dart';
+import '../../../categories/providers/category_providers.dart';
 import '../../domain/entities/processing_status.dart';
 import '../../domain/entities/screenshot_item.dart';
 import '../../providers/screenshot_providers.dart';
@@ -57,17 +58,28 @@ class _ScreenshotDetailScreenState
       final isCategoryCorrected =
           _selectedCategory != widget.item.primaryCategory;
 
-      await repo.updateReviewStatus(
-        widget.item.id,
-        status: isCategoryCorrected
-            ? ReviewStatus.corrected
-            : ReviewStatus.approved,
-        correctedCategory: _selectedCategory,
+      final scheduledDate = _selectedCategory == 'Delete'
+          ? (widget.item.scheduledDeletionDate ??
+              DateTime.now().add(const Duration(days: 30)))
+          : null;
+
+      final updatedItem = widget.item.copyWith(
+        title: _titleController.text.trim(),
+        primaryCategory: _selectedCategory,
         tags: _tags,
-        note: _noteController.text.trim().isEmpty
+        userNote: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
+        scheduledDeletionDate: scheduledDate,
+        clearScheduledDeletionDate: _selectedCategory != 'Delete',
+        reviewStatus: isCategoryCorrected
+            ? ReviewStatus.corrected
+            : ReviewStatus.approved,
+        needsHumanContext: false,
+        updatedAt: DateTime.now(),
       );
+
+      await repo.saveScreenshot(updatedItem);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -92,13 +104,33 @@ class _ScreenshotDetailScreenState
     }
   }
 
-  Future<void> _deleteScreenshot() async {
+  Future<void> _restoreFromDelete() async {
+    setState(() => _isSaving = true);
+    try {
+      final autoDel = ref.read(autoDeletionServiceProvider);
+      await autoDel.restoreItem(widget.item, targetCategory: 'Uncategorized');
+      setState(() => _selectedCategory = 'Uncategorized');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Restored from Delete bucket!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _permanentDeleteNow() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Screenshot'),
+        backgroundColor: AppColors.darkSurfaceElevated,
+        title: const Text('Permanent Deletion'),
         content: const Text(
-          'Are you sure you want to delete this screenshot from Project Sift? This will remove all cloud indexing.',
+          'Are you sure you want to permanently delete this screenshot now? This will remove it from your device gallery and cloud storage immediately.',
         ),
         actions: [
           TextButton(
@@ -108,16 +140,81 @@ class _ScreenshotDetailScreenState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: const Text('Delete Permanently'),
           ),
         ],
       ),
     );
 
     if (confirmed == true && mounted) {
-      final repo = ref.read(screenshotRepositoryProvider);
-      await repo.deleteScreenshot(widget.item.id);
+      final autoDel = ref.read(autoDeletionServiceProvider);
+      await autoDel.purgeItem(widget.item);
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permanently deleted from device and cloud.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  Future<void> _deleteScreenshot() async {
+    if (_selectedCategory == 'Delete') {
+      await _permanentDeleteNow();
+      return;
+    }
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkSurfaceElevated,
+        title: const Text('Delete Screenshot'),
+        content: const Text(
+          'Choose how you want to remove this screenshot:',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, 'move_delete'),
+            child: const Text('Move to Delete (30 Days)'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, 'permanent'),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (action == 'move_delete' && mounted) {
+      final autoDel = ref.read(autoDeletionServiceProvider);
+      await autoDel.moveToDelete(widget.item);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Moved to Delete. Auto-deletes in 30 days.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } else if (action == 'permanent' && mounted) {
+      final autoDel = ref.read(autoDeletionServiceProvider);
+      await autoDel.purgeItem(widget.item);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permanently deleted from device and cloud.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
         Navigator.pop(context);
       }
     }
@@ -139,6 +236,9 @@ class _ScreenshotDetailScreenState
 
   @override
   Widget build(BuildContext context) {
+    final allCategories = ref.watch(allCategoriesProvider);
+    final dropdownCategories = {...allCategories, _selectedCategory}.toList();
+
     return Scaffold(
       appBar: AppBar(
         title:
@@ -193,26 +293,69 @@ class _ScreenshotDetailScreenState
           const SizedBox(height: AppSpacing.md),
 
           // Category Selector
-          Text('PRIMARY CATEGORY',
-              style: AppTypography.labelSmall
-                  .copyWith(color: AppColors.textSecondaryDark)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('PRIMARY CATEGORY',
+                  style: AppTypography.labelSmall
+                      .copyWith(color: AppColors.textSecondaryDark)),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                ),
+                icon: const Icon(Icons.add, size: 14, color: AppColors.primary),
+                label: const Text('New Category',
+                    style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                onPressed: () async {
+                  final newCat = await showAddCategoryDialog(context, ref);
+                  if (newCat != null && mounted) {
+                    setState(() => _selectedCategory = newCat);
+                  }
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.xs),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             decoration: BoxDecoration(
               color: AppColors.darkSurfaceElevated,
               borderRadius: AppSpacing.roundedSm,
-              border: Border.all(color: AppColors.darkBorder),
+              border: Border.all(
+                color: _selectedCategory == 'Delete'
+                    ? AppColors.error
+                    : AppColors.darkBorder,
+              ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _selectedCategory,
+                value: dropdownCategories.contains(_selectedCategory)
+                    ? _selectedCategory
+                    : 'Other',
                 isExpanded: true,
                 dropdownColor: AppColors.darkSurfaceElevated,
-                items: CategoryClassifier.canonicalCategories.map((cat) {
+                items: dropdownCategories.map((cat) {
+                  final isDel = cat == 'Delete';
                   return DropdownMenuItem(
                     value: cat,
-                    child: Text(cat, style: AppTypography.bodyMedium),
+                    child: Row(
+                      children: [
+                        if (isDel) ...[
+                          const Icon(Icons.delete_outline,
+                              size: 16, color: AppColors.error),
+                          const SizedBox(width: AppSpacing.xs),
+                        ],
+                        Text(
+                          cat,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: isDel
+                                ? AppColors.error
+                                : AppColors.textPrimaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
                 onChanged: (val) {
@@ -221,6 +364,70 @@ class _ScreenshotDetailScreenState
               ),
             ),
           ),
+          if (_selectedCategory == 'Delete') ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: AppSpacing.paddingMd,
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: AppSpacing.roundedSm,
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.auto_delete_outlined,
+                          color: AppColors.error, size: 20),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        widget.item.daysUntilDeletion != null
+                            ? 'Scheduled deletion in ${widget.item.daysUntilDeletion} days'
+                            : 'Auto-deletes after 30 days',
+                        style: AppTypography.titleSmall.copyWith(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Screenshots in Delete category are permanently purged from your device gallery and cloud storage 30 days after being added.',
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.textSecondaryDark),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                              color: AppColors.textSecondaryDark),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.restore_from_trash, size: 16),
+                        label: const Text('Restore'),
+                        onPressed: _isSaving ? null : _restoreFromDelete,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.delete_forever, size: 16),
+                        label: const Text('Delete Now'),
+                        onPressed: _isSaving ? null : _permanentDeleteNow,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
 
           // Tags Editor

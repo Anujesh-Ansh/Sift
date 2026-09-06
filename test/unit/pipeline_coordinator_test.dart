@@ -83,6 +83,9 @@ class MockScreenshotRepository implements ScreenshotRepository {
   Stream<List<ScreenshotItem>> watchScreenshots(
           {String? category, ReviewStatus? reviewStatus, int limit = 100}) =>
       const Stream.empty();
+
+  @override
+  Future<List<ScreenshotItem>> getScreenshotsPendingDeletion() async => [];
 }
 
 void main() {

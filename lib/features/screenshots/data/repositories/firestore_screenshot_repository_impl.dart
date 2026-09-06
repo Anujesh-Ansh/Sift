@@ -9,7 +9,7 @@ import '../models/firestore_screenshot_dto.dart';
 /// Production implementation of ScreenshotRepository with Local-First memory caching
 /// and graceful offline Cloud Firestore synchronization.
 class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _firestore;
   final String _userId;
   static const _logger = AppLogger('FirestoreScreenshotRepositoryImpl');
 
@@ -18,14 +18,30 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
   static final StreamController<void> _updatesController =
       StreamController<void>.broadcast();
 
+  static FirebaseFirestore? _safeGetFirestore([FirebaseFirestore? custom]) {
+    if (custom != null) return custom;
+    try {
+      return FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
   FirestoreScreenshotRepositoryImpl({
     FirebaseFirestore? firestore,
     required String userId,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+  })  : _firestore = _safeGetFirestore(firestore),
         _userId = userId;
 
-  CollectionReference<Map<String, dynamic>> get _screenshotsCol =>
-      _firestore.collection('users').doc(_userId).collection('screenshots');
+  CollectionReference<Map<String, dynamic>>? get _screenshotsCol {
+    final fs = _firestore;
+    if (fs == null) return null;
+    try {
+      return fs.collection('users').doc(_userId).collection('screenshots');
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<ScreenshotItem> _filterLocal({
     String? category,
@@ -69,30 +85,33 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
 
     // 3. Listen to Firestore when available
     StreamSubscription? firestoreSub;
-    try {
-      Query<Map<String, dynamic>> query = _screenshotsCol;
-      if (category != null && category.isNotEmpty && category != 'All') {
-        query = query.where('primary_category', isEqualTo: category);
-      }
-      if (reviewStatus != null) {
-        query = query.where('review_status', isEqualTo: reviewStatus.name);
-      }
-      query = query.orderBy('source_created_at', descending: true).limit(limit);
-
-      firestoreSub = query.snapshots().listen((snapshot) {
-        for (final doc in snapshot.docs) {
-          final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
-          _localStore[item.id] = item;
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        Query<Map<String, dynamic>> query = col;
+        if (category != null && category.isNotEmpty && category != 'All') {
+          query = query.where('primary_category', isEqualTo: category);
         }
-        emitCurrent();
-      }, onError: (e) {
+        if (reviewStatus != null) {
+          query = query.where('review_status', isEqualTo: reviewStatus.name);
+        }
+        query = query.orderBy('source_created_at', descending: true).limit(limit);
+
+        firestoreSub = query.snapshots().listen((snapshot) {
+          for (final doc in snapshot.docs) {
+            final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
+            _localStore[item.id] = item;
+          }
+          emitCurrent();
+        }, onError: (e) {
+          _logger.w(
+              'Firestore stream encountered error ($e). Continuing with local cache.');
+          emitCurrent();
+        });
+      } catch (e) {
         _logger.w(
-            'Firestore stream encountered error ($e). Continuing with local cache.');
-        emitCurrent();
-      });
-    } catch (e) {
-      _logger.w(
-          'Firestore query setup skipped or unavailable ($e). Using local cache.');
+            'Firestore query setup skipped or unavailable ($e). Using local cache.');
+      }
     }
 
     controller.onCancel = () {
@@ -122,26 +141,29 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     final localSub = _updatesController.stream.listen((_) => emitCurrent());
 
     StreamSubscription? firestoreSub;
-    try {
-      final query = _screenshotsCol
-          .where('needs_human_context', isEqualTo: true)
-          .where('review_status', isEqualTo: ReviewStatus.pending.name)
-          .orderBy('source_created_at', descending: true)
-          .limit(limit);
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        final query = col
+            .where('needs_human_context', isEqualTo: true)
+            .where('review_status', isEqualTo: ReviewStatus.pending.name)
+            .orderBy('source_created_at', descending: true)
+            .limit(limit);
 
-      firestoreSub = query.snapshots().listen((snapshot) {
-        for (final doc in snapshot.docs) {
-          final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
-          _localStore[item.id] = item;
-        }
-        emitCurrent();
-      }, onError: (e) {
-        _logger.w(
-            'Firestore review stream error ($e). Continuing with local cache.');
-        emitCurrent();
-      });
-    } catch (e) {
-      _logger.w('Firestore review query unavailable ($e). Using local cache.');
+        firestoreSub = query.snapshots().listen((snapshot) {
+          for (final doc in snapshot.docs) {
+            final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
+            _localStore[item.id] = item;
+          }
+          emitCurrent();
+        }, onError: (e) {
+          _logger.w(
+              'Firestore review stream error ($e). Continuing with local cache.');
+          emitCurrent();
+        });
+      } catch (e) {
+        _logger.w('Firestore review query unavailable ($e). Using local cache.');
+      }
     }
 
     controller.onCancel = () {
@@ -157,8 +179,10 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     if (_localStore.containsKey(id)) {
       return _localStore[id];
     }
+    final col = _screenshotsCol;
+    if (col == null) return null;
     try {
-      final doc = await _screenshotsCol.doc(id).get();
+      final doc = await col.doc(id).get();
       if (!doc.exists) return null;
       final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
       _localStore[id] = item;
@@ -178,12 +202,13 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     _updatesController.add(null);
     _logger.i('Saved screenshot ${item.id} to local repository cache');
 
-    if (_firestoreWriteDisabled) return;
+    final col = _screenshotsCol;
+    if (_firestoreWriteDisabled || col == null) return;
 
     // 2. Asynchronously synchronize to Cloud Firestore with 3s timeout
     try {
       final dto = FirestoreScreenshotDto.fromDomain(item);
-      await _screenshotsCol
+      await col
           .doc(item.id)
           .set(
             dto.toMap(),
@@ -223,29 +248,32 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     }
 
     // 2. Synchronize to Firestore
-    try {
-      final updates = <String, dynamic>{
-        'review_status': status.name,
-        'needs_human_context': status == ReviewStatus.pending,
-        'updated_at': Timestamp.now(),
-      };
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        final updates = <String, dynamic>{
+          'review_status': status.name,
+          'needs_human_context': status == ReviewStatus.pending,
+          'updated_at': Timestamp.now(),
+        };
 
-      if (correctedCategory != null && correctedCategory.isNotEmpty) {
-        updates['primary_category'] = correctedCategory;
+        if (correctedCategory != null && correctedCategory.isNotEmpty) {
+          updates['primary_category'] = correctedCategory;
+        }
+
+        if (tags != null) {
+          updates['tags'] = tags;
+        }
+
+        if (note != null) {
+          updates['user_note'] = note;
+        }
+
+        await col.doc(id).update(updates);
+        _logger.i('Updated review status for screenshot $id: ${status.name}');
+      } catch (e, st) {
+        _logger.w('Cloud review status update skipped ($e). Saved locally.', e, st);
       }
-
-      if (tags != null) {
-        updates['tags'] = tags;
-      }
-
-      if (note != null) {
-        updates['user_note'] = note;
-      }
-
-      await _screenshotsCol.doc(id).update(updates);
-      _logger.i('Updated review status for screenshot $id: ${status.name}');
-    } catch (e, st) {
-      _logger.w('Cloud review status update skipped ($e). Saved locally.', e, st);
     }
   }
 
@@ -254,11 +282,14 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
     _localStore.remove(id);
     _updatesController.add(null);
 
-    try {
-      await _screenshotsCol.doc(id).delete();
-      _logger.i('Deleted screenshot document $id from Firestore');
-    } catch (e, st) {
-      _logger.w('Cloud delete skipped ($e). Deleted locally.', e, st);
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        await col.doc(id).delete();
+        _logger.i('Deleted screenshot document $id from Firestore');
+      } catch (e, st) {
+        _logger.w('Cloud delete skipped ($e). Deleted locally.', e, st);
+      }
     }
   }
 
@@ -269,15 +300,42 @@ class FirestoreScreenshotRepositoryImpl implements ScreenshotRepository {
         .whereType<String>()
         .toSet();
 
-    try {
-      final snapshot = await _screenshotsCol.get();
-      final cloudIds = snapshot.docs
-          .map((doc) => doc.data()['source_asset_id'] as String?)
-          .whereType<String>()
-          .toSet();
-      return {...localIds, ...cloudIds};
-    } catch (e) {
-      return localIds;
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        final snapshot = await col.get();
+        final cloudIds = snapshot.docs
+            .map((doc) => doc.data()['source_asset_id'] as String?)
+            .whereType<String>()
+            .toSet();
+        return {...localIds, ...cloudIds};
+      } catch (e) {
+        return localIds;
+      }
     }
+    return localIds;
+  }
+
+  @override
+  Future<List<ScreenshotItem>> getScreenshotsPendingDeletion() async {
+    final col = _screenshotsCol;
+    if (col != null) {
+      try {
+        final snapshot = await col
+            .where('primary_category', isEqualTo: 'Delete')
+            .get();
+        for (final doc in snapshot.docs) {
+          final item = FirestoreScreenshotDto.fromFirestore(doc).toDomain();
+          _localStore[item.id] = item;
+        }
+      } catch (e) {
+        _logger.w('Cloud query for pending deletions skipped ($e). Using local store.');
+      }
+    }
+
+    return _localStore.values.where((i) {
+      return i.primaryCategory == 'Delete' ||
+          i.scheduledDeletionDate != null;
+    }).toList();
   }
 }

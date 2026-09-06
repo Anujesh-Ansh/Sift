@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../infrastructure/firebase/storage_service.dart';
+import '../../../infrastructure/media/auto_deletion_service.dart';
 import '../../../infrastructure/media/deletion_reconciliation_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/repositories/firestore_screenshot_repository_impl.dart';
@@ -14,6 +15,18 @@ final storageServiceProvider = Provider<FirebaseStorageService>((ref) {
 final screenshotRepositoryProvider = Provider<ScreenshotRepository>((ref) {
   final userId = ref.watch(currentUserIdProvider) ?? 'anonymous';
   return FirestoreScreenshotRepositoryImpl(userId: userId);
+});
+
+final autoDeletionServiceProvider = Provider<AutoDeletionService>((ref) {
+  final repo = ref.watch(screenshotRepositoryProvider);
+  final source = ref.watch(screenshotSourceProvider);
+  final dedup = ref.watch(deduplicationServiceProvider);
+
+  return AutoDeletionService(
+    repository: repo,
+    screenshotSource: source,
+    deduplicationService: dedup,
+  );
 });
 
 final deletionReconciliationServiceProvider =

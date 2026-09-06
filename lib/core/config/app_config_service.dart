@@ -59,6 +59,46 @@ class AppConfigService {
     }
   }
 
+  /// Retrieves persisted custom categories.
+  static Future<List<String>> getCustomCategories() async {
+    try {
+      final file = await _getConfigFile();
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final map = jsonDecode(content);
+        if (map is Map<String, dynamic> && map['custom_categories'] is List) {
+          return (map['custom_categories'] as List)
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+        }
+      }
+    } catch (e, st) {
+      _logger.w('Failed reading custom categories from config: $e', e, st);
+    }
+    return [];
+  }
+
+  /// Persists custom categories to local config file.
+  static Future<void> saveCustomCategories(List<String> categories) async {
+    try {
+      final file = await _getConfigFile();
+      Map<String, dynamic> current = {};
+      if (await file.exists()) {
+        try {
+          final content = await file.readAsString();
+          current = jsonDecode(content) as Map<String, dynamic>;
+        } catch (_) {}
+      }
+      current['custom_categories'] = categories;
+      current['updated_at'] = DateTime.now().toIso8601String();
+      await file.writeAsString(jsonEncode(current), flush: true);
+      _logger.i('Successfully saved ${categories.length} custom categories.');
+    } catch (e, st) {
+      _logger.e('Failed saving custom categories: $e', e, st);
+    }
+  }
+
   static Future<File> _getConfigFile() async {
     final dir = await getApplicationDocumentsDirectory();
     return File('${dir.path}/$_configFileName');

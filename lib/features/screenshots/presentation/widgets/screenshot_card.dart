@@ -67,24 +67,84 @@ class ScreenshotCard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
+                        color: item.primaryCategory == 'Delete'
+                            ? AppColors.error.withValues(alpha: 0.8)
+                            : Colors.black.withValues(alpha: 0.65),
                         borderRadius: AppSpacing.roundedSm,
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.15),
+                          color: item.primaryCategory == 'Delete'
+                              ? AppColors.error
+                              : Colors.white.withValues(alpha: 0.15),
                         ),
                       ),
-                      child: Text(
-                        item.primaryCategory,
-                        style: AppTypography.labelSmall.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryDark,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (item.primaryCategory == 'Delete') ...[
+                            const Icon(
+                              Icons.delete_outline,
+                              size: 11,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 3),
+                          ],
+                          Text(
+                            item.primaryCategory,
+                            style: AppTypography.labelSmall.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimaryDark,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  // Delete Category / Retention countdown badge
+                  if (item.primaryCategory == 'Delete')
+                    Positioned(
+                      top: AppSpacing.xs,
+                      right: AppSpacing.xs,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: AppSpacing.roundedSm,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.access_time_rounded,
+                              size: 10,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              item.daysUntilDeletion != null
+                                  ? '${item.daysUntilDeletion}d left'
+                                  : '30d left',
+                              style: AppTypography.labelSmall.copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   // Review Required badge
-                  if (item.needsHumanContext ||
+                  else if (item.needsHumanContext ||
                       item.processingStatus == ProcessingStatus.reviewRequired)
                     Positioned(
                       top: AppSpacing.xs,

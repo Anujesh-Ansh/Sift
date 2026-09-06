@@ -18,6 +18,7 @@ class ScreenshotItem {
   final DateTime sourceCreatedAt;
   final DateTime indexedAt;
   final DateTime updatedAt;
+  final DateTime? scheduledDeletionDate;
   final int imageWidth;
   final int imageHeight;
   final int thumbnailWidth;
@@ -45,6 +46,7 @@ class ScreenshotItem {
     required this.sourceCreatedAt,
     required this.indexedAt,
     required this.updatedAt,
+    this.scheduledDeletionDate,
     required this.imageWidth,
     required this.imageHeight,
     required this.thumbnailWidth,
@@ -73,6 +75,8 @@ class ScreenshotItem {
     DateTime? sourceCreatedAt,
     DateTime? indexedAt,
     DateTime? updatedAt,
+    DateTime? scheduledDeletionDate,
+    bool clearScheduledDeletionDate = false,
     int? imageWidth,
     int? imageHeight,
     int? thumbnailWidth,
@@ -100,6 +104,9 @@ class ScreenshotItem {
       sourceCreatedAt: sourceCreatedAt ?? this.sourceCreatedAt,
       indexedAt: indexedAt ?? this.indexedAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      scheduledDeletionDate: clearScheduledDeletionDate
+          ? null
+          : (scheduledDeletionDate ?? this.scheduledDeletionDate),
       imageWidth: imageWidth ?? this.imageWidth,
       imageHeight: imageHeight ?? this.imageHeight,
       thumbnailWidth: thumbnailWidth ?? this.thumbnailWidth,
@@ -110,5 +117,12 @@ class ScreenshotItem {
       modelVersion: modelVersion ?? this.modelVersion,
       schemaVersion: schemaVersion ?? this.schemaVersion,
     );
+  }
+
+  /// Remaining days before permanent deletion (for items in 'Delete' category).
+  int? get daysUntilDeletion {
+    if (scheduledDeletionDate == null) return null;
+    final diff = scheduledDeletionDate!.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
   }
 }

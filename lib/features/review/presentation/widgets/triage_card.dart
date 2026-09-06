@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_typography.dart';
-import '../../../../infrastructure/ai/category_classifier.dart';
+import '../../../categories/providers/category_providers.dart';
 import '../../../screenshots/domain/entities/screenshot_item.dart';
 
-class TriageCard extends StatefulWidget {
+class TriageCard extends ConsumerStatefulWidget {
   final ScreenshotItem item;
   final int currentIndex;
   final int totalCount;
@@ -26,10 +27,10 @@ class TriageCard extends StatefulWidget {
   });
 
   @override
-  State<TriageCard> createState() => _TriageCardState();
+  ConsumerState<TriageCard> createState() => _TriageCardState();
 }
 
-class _TriageCardState extends State<TriageCard> {
+class _TriageCardState extends ConsumerState<TriageCard> {
   late String _selectedCategory;
   late List<String> _tags;
   late TextEditingController _noteController;
@@ -81,6 +82,8 @@ class _TriageCardState extends State<TriageCard> {
 
   @override
   Widget build(BuildContext context) {
+    final allCategories = ref.watch(allCategoriesProvider);
+    final categories = {...allCategories, _selectedCategory}.toList();
     final isModified = _selectedCategory != widget.item.primaryCategory ||
         _noteController.text.trim() != (widget.item.userNote ?? '');
 
@@ -200,34 +203,85 @@ class _TriageCardState extends State<TriageCard> {
                 height: 38,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: CategoryClassifier.canonicalCategories.length,
+                  itemCount: categories.length,
                   separatorBuilder: (_, __) =>
                       const SizedBox(width: AppSpacing.xs),
                   itemBuilder: (context, idx) {
-                    final cat = CategoryClassifier.canonicalCategories[idx];
+                    final cat = categories[idx];
                     final isSelected = _selectedCategory == cat;
+                    final isDelete = cat == 'Delete';
 
                     return ChoiceChip(
                       selected: isSelected,
+                      avatar: isDelete
+                          ? Icon(
+                              Icons.delete_outline,
+                              size: 13,
+                              color: isSelected ? Colors.white : AppColors.error,
+                            )
+                          : null,
                       label: Text(
                         cat,
                         style: TextStyle(
                           fontSize: 11,
                           color: isSelected
                               ? Colors.white
-                              : AppColors.textSecondaryDark,
+                              : (isDelete
+                                  ? AppColors.error
+                                  : AppColors.textSecondaryDark),
                           fontWeight:
                               isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.darkSurfaceElevated,
+                      selectedColor: isDelete ? AppColors.error : AppColors.primary,
+                      backgroundColor: isDelete
+                          ? AppColors.error.withValues(alpha: 0.1)
+                          : AppColors.darkSurfaceElevated,
+                      side: isDelete
+                          ? BorderSide(
+                              color: isSelected
+                                  ? AppColors.error
+                                  : AppColors.error.withValues(alpha: 0.4),
+                            )
+                          : null,
                       onSelected: (_) =>
                           setState(() => _selectedCategory = cat),
                     );
                   },
                 ),
               ),
+              if (_selectedCategory == 'Delete') ...[
+                const SizedBox(height: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: AppSpacing.roundedSm,
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_delete_outlined,
+                          size: 14, color: AppColors.error),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          'Will be scheduled to auto-delete in 30 days.',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
 
               // Extracted Text snippet

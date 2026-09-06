@@ -78,12 +78,17 @@ class PipelineCoordinator {
 
     // 3. Human-In-The-Loop Routing
     final isReviewRequired = analysis.needsHumanContext;
+    final scheduledDate = analysis.primaryCategory == 'Delete'
+        ? DateTime.now().add(const Duration(days: 30))
+        : null;
+
     final finalItem = item.copyWith(
       title: analysis.title,
       primaryCategory: analysis.primaryCategory,
       tags: analysis.tags,
       extractedText: analysis.extractedText,
       needsHumanContext: analysis.needsHumanContext,
+      scheduledDeletionDate: scheduledDate,
       reviewStatus:
           isReviewRequired ? ReviewStatus.pending : ReviewStatus.approved,
       processingStatus: isReviewRequired

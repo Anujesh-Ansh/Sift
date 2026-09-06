@@ -33,4 +33,7 @@ abstract class ScreenshotRepository {
 
   /// Retrieves all source asset IDs currently indexed for the user (used for delta sync).
   Future<Set<String>> getIndexedAssetIds();
+
+  /// Retrieves screenshots pending deletion (marked 'Delete' or having a scheduled deletion date).
+  Future<List<ScreenshotItem>> getScreenshotsPendingDeletion();
 }

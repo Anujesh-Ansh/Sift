@@ -119,6 +119,23 @@ class PhotoManagerScreenshotSource implements ScreenshotSource {
     }
   }
 
+  @override
+  Future<bool> deleteAsset(String assetId) async {
+    try {
+      final result = await PhotoManager.editor.deleteWithIds([assetId]);
+      final success = result.contains(assetId);
+      if (success) {
+        _logger.i('Successfully deleted asset from gallery: $assetId');
+      } else {
+        _logger.w('Failed to delete asset (not in result list): $assetId');
+      }
+      return success;
+    } catch (e, st) {
+      _logger.e('Error deleting asset from gallery: $assetId', e, st);
+      return false;
+    }
+  }
+
   bool _isScreenshotHeuristic(AssetEntity asset) {
     final title = (asset.title ?? '').toLowerCase();
     return title.startsWith('screenshot') ||

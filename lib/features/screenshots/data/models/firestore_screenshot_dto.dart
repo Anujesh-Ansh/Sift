@@ -19,6 +19,7 @@ class FirestoreScreenshotDto {
   final Timestamp sourceCreatedAt;
   final Timestamp indexedAt;
   final Timestamp updatedAt;
+  final Timestamp? scheduledDeletionDate;
   final int imageWidth;
   final int imageHeight;
   final int thumbnailWidth;
@@ -45,6 +46,7 @@ class FirestoreScreenshotDto {
     required this.sourceCreatedAt,
     required this.indexedAt,
     required this.updatedAt,
+    this.scheduledDeletionDate,
     required this.imageWidth,
     required this.imageHeight,
     required this.thumbnailWidth,
@@ -73,6 +75,9 @@ class FirestoreScreenshotDto {
       sourceCreatedAt: Timestamp.fromDate(item.sourceCreatedAt),
       indexedAt: Timestamp.fromDate(item.indexedAt),
       updatedAt: Timestamp.fromDate(item.updatedAt),
+      scheduledDeletionDate: item.scheduledDeletionDate != null
+          ? Timestamp.fromDate(item.scheduledDeletionDate!)
+          : null,
       imageWidth: item.imageWidth,
       imageHeight: item.imageHeight,
       thumbnailWidth: item.thumbnailWidth,
@@ -103,6 +108,7 @@ class FirestoreScreenshotDto {
       sourceCreatedAt: sourceCreatedAt.toDate(),
       indexedAt: indexedAt.toDate(),
       updatedAt: updatedAt.toDate(),
+      scheduledDeletionDate: scheduledDeletionDate?.toDate(),
       imageWidth: imageWidth,
       imageHeight: imageHeight,
       thumbnailWidth: thumbnailWidth,
@@ -147,6 +153,12 @@ class FirestoreScreenshotDto {
       updatedAt: data['updated_at'] is Timestamp
           ? data['updated_at'] as Timestamp
           : Timestamp.now(),
+      scheduledDeletionDate: data['scheduled_deletion_date'] is Timestamp
+          ? data['scheduled_deletion_date'] as Timestamp
+          : (data['scheduled_deletion_date'] is String
+              ? Timestamp.fromDate(
+                  DateTime.parse(data['scheduled_deletion_date']))
+              : null),
       imageWidth: (data['image_width'] as num?)?.toInt() ?? 0,
       imageHeight: (data['image_height'] as num?)?.toInt() ?? 0,
       thumbnailWidth: (data['thumbnail_width'] as num?)?.toInt() ?? 0,
@@ -175,6 +187,7 @@ class FirestoreScreenshotDto {
       'source_created_at': sourceCreatedAt,
       'indexed_at': indexedAt,
       'updated_at': updatedAt,
+      'scheduled_deletion_date': scheduledDeletionDate,
       'image_width': imageWidth,
       'image_height': imageHeight,
       'thumbnail_width': thumbnailWidth,

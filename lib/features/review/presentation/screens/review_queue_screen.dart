@@ -71,20 +71,34 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                     );
                   },
                   onCorrect: (cat, tags, note) async {
-                    final repo = ref.read(screenshotRepositoryProvider);
-                    await repo.updateReviewStatus(
-                      currentItem.id,
-                      status: ReviewStatus.corrected,
-                      correctedCategory: cat,
-                      tags: tags,
-                      note: note,
-                    );
+                    if (cat == 'Delete') {
+                      final autoDel = ref.read(autoDeletionServiceProvider);
+                      await autoDel.moveToDelete(currentItem.copyWith(
+                        reviewStatus: ReviewStatus.corrected,
+                        tags: tags,
+                        userNote: note,
+                        needsHumanContext: false,
+                      ));
+                    } else {
+                      final repo = ref.read(screenshotRepositoryProvider);
+                      await repo.updateReviewStatus(
+                        currentItem.id,
+                        status: ReviewStatus.corrected,
+                        correctedCategory: cat,
+                        tags: tags,
+                        note: note,
+                      );
+                    }
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Classification updated!'),
-                        backgroundColor: AppColors.primary,
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(cat == 'Delete'
+                            ? 'Moved to Delete (auto-deletes in 30 days)'
+                            : 'Classification updated!'),
+                        backgroundColor: cat == 'Delete'
+                            ? AppColors.error
+                            : AppColors.primary,
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   },

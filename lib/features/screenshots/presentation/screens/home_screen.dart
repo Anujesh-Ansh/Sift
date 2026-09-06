@@ -25,12 +25,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(autoDeletionServiceProvider).purgeExpiredScreenshots().ignore();
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _triggerSync() async {
+    ref.read(autoDeletionServiceProvider).purgeExpiredScreenshots().ignore();
     final apiKey = ref.read(geminiApiKeyProvider);
     if (apiKey.isEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

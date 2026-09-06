@@ -23,4 +23,8 @@ abstract class ScreenshotSource {
 
   /// Checks whether a previously indexed asset still exists on device.
   Future<bool> assetExists(String assetId);
+
+  /// Permanently deletes an asset from device storage/gallery.
+  /// Returns true if deletion succeeded.
+  Future<bool> deleteAsset(String assetId);
 }

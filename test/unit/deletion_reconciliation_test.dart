@@ -29,6 +29,12 @@ class MockSource implements ScreenshotSource {
   Future<Uint8List?> getThumbnailBytes(String assetId,
           {int width = 250, int height = 250}) async =>
       null;
+
+  @override
+  Future<bool> deleteAsset(String assetId) async {
+    existingIds.remove(assetId);
+    return true;
+  }
 }
 
 class MockRepo implements ScreenshotRepository {
@@ -65,6 +71,9 @@ class MockRepo implements ScreenshotRepository {
   Stream<List<ScreenshotItem>> watchScreenshots(
           {String? category, ReviewStatus? reviewStatus, int limit = 100}) =>
       const Stream.empty();
+
+  @override
+  Future<List<ScreenshotItem>> getScreenshotsPendingDeletion() async => [];
 }
 
 class MockStorage implements StorageService {

@@ -19,18 +19,31 @@ class CategoryClassifier {
     'Reference',
     'Aesthetic',
     'Other',
+    'Delete',
   ];
 
   static const String fallbackCategory = 'Other';
+  static const String deleteCategory = 'Delete';
 
   /// Normalizes a raw category string from AI output or user input.
-  /// Matches case-insensitively and maps unknown categories to 'Other'.
-  static String normalize(String? rawCategory) {
+  /// Matches case-insensitively against custom categories, canonical categories, and mapped synonyms.
+  static String normalize(String? rawCategory, [List<String>? customCategories]) {
     if (rawCategory == null || rawCategory.trim().isEmpty) {
       return fallbackCategory;
     }
 
     final trimmed = rawCategory.trim();
+
+    // 1. Check custom categories first
+    if (customCategories != null) {
+      for (final custom in customCategories) {
+        if (custom.toLowerCase() == trimmed.toLowerCase()) {
+          return custom;
+        }
+      }
+    }
+
+    // 2. Check canonical categories
     for (final canonical in canonicalCategories) {
       if (canonical.toLowerCase() == trimmed.toLowerCase()) {
         return canonical;
@@ -98,6 +111,14 @@ class CategoryClassifier {
         lower.contains('design') ||
         lower.contains('fashion')) {
       return 'Aesthetic';
+    }
+    if (lower.contains('trash') ||
+        lower.contains('delete') ||
+        lower.contains('junk') ||
+        lower.contains('remove') ||
+        lower.contains('disposable') ||
+        lower.contains('temporary')) {
+      return deleteCategory;
     }
 
     return fallbackCategory;

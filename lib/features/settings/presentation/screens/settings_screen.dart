@@ -4,6 +4,8 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_typography.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../categories/presentation/dialogs/add_category_dialog.dart';
+import '../../../categories/providers/category_providers.dart';
 import '../../../screenshots/providers/gemini_providers.dart';
 import '../../../screenshots/providers/ingestion_providers.dart';
 import '../../../screenshots/providers/screenshot_providers.dart';
@@ -86,6 +88,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _runAutoDeletePurge() async {
+    final service = ref.read(autoDeletionServiceProvider);
+    final count = await service.purgeExpiredScreenshots();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(count > 0
+              ? 'Auto-delete complete: Purged $count expired screenshots.'
+              : 'No expired screenshots found in Delete category.'),
+          backgroundColor: count > 0 ? AppColors.error : AppColors.primary,
+        ),
+      );
+    }
+  }
+
   Future<void> _requestPermissions() async {
     final permService = ref.read(mediaPermissionServiceProvider);
     final state = await permService.requestPermission();
@@ -108,6 +125,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authState = ref.watch(authStateProvider);
     final userId = authState.asData?.value?.id ?? 'Not authenticated';
     final permissionAsync = ref.watch(mediaPermissionStatusProvider);
+    final customCategories = ref.watch(customCategoriesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -232,6 +250,114 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          _buildSectionHeader('Custom Categories & Lifecycle'),
+          Card(
+            child: Padding(
+              padding: AppSpacing.paddingMd,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Custom Categories',
+                          style: AppTypography.titleMedium),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: AppColors.primary,
+                        ),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Category'),
+                        onPressed: () => showAddCategoryDialog(context, ref),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (customCategories.isEmpty)
+                    Text(
+                      'No custom categories created yet. Tap "+ Add Category" to create one!',
+                      style: AppTypography.bodySmall
+                          .copyWith(color: AppColors.textSecondaryDark),
+                    )
+                  else
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: customCategories.map((cat) {
+                        return Chip(
+                          label: Text(cat, style: AppTypography.labelSmall),
+                          backgroundColor: AppColors.darkBackground,
+                          deleteIcon: const Icon(Icons.close, size: 14),
+                          onDeleted: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: AppColors.darkSurfaceElevated,
+                                title: const Text('Remove Category'),
+                                content: Text(
+                                    'Are you sure you want to remove the "$cat" category?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(
+                                        backgroundColor: AppColors.error),
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Remove'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              ref
+                                  .read(customCategoriesProvider.notifier)
+                                  .removeCategory(cat);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  const Divider(height: AppSpacing.lg),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.15),
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusSm),
+                        ),
+                        child: const Icon(Icons.auto_delete_outlined,
+                            color: AppColors.error, size: 20),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('30-Day Auto-Deletion Bucket',
+                                style: AppTypography.titleSmall
+                                    .copyWith(color: AppColors.error)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Any screenshot moved to the "Delete" category is retained for 30 days and then automatically purged from device storage and cloud.',
+                              style: AppTypography.bodySmall
+                                  .copyWith(color: AppColors.textSecondaryDark),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           _buildSectionHeader('Synchronization & Maintenance'),
           Card(
             child: Column(
@@ -269,6 +395,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       'Purge cloud indexing for deleted device screenshots',
                       style: AppTypography.bodyMedium),
                   onTap: _reconcileDeleted,
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.auto_delete_outlined,
+                      color: AppColors.error),
+                  title: const Text('Auto-Delete Clean Up (30 Days)',
+                      style: AppTypography.titleMedium),
+                  subtitle: const Text(
+                      'Scan & permanently purge expired items in Delete category',
+                      style: AppTypography.bodyMedium),
+                  onTap: _runAutoDeletePurge,
                 ),
               ],
             ),

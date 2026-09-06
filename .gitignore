@@ -75,4 +75,5 @@ android/build/
 *.keystore
 service-account*.json
 google-services-private*.json
+google-services.json
 *secret*

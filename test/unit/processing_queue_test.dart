@@ -30,6 +30,12 @@ class MockScreenshotSource implements ScreenshotSource {
 
   @override
   Future<bool> assetExists(String assetId) async => files.containsKey(assetId);
+
+  @override
+  Future<bool> deleteAsset(String assetId) async {
+    files.remove(assetId);
+    return true;
+  }
 }
 
 class MockLocalPreprocessor extends LocalPreprocessor {
