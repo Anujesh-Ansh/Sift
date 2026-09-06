@@ -7,6 +7,7 @@ import '../../../infrastructure/media/photo_manager_screenshot_source.dart';
 import '../../../infrastructure/media/processing_queue.dart';
 import '../../../infrastructure/media/screenshot_source.dart';
 import '../domain/entities/screenshot_item.dart';
+import '../../../infrastructure/background/background_sync_service.dart';
 import 'gemini_providers.dart';
 
 final mediaPermissionServiceProvider = Provider<MediaPermissionService>((ref) {
@@ -70,4 +71,8 @@ final mediaPermissionStatusProvider =
     FutureProvider<MediaPermissionState>((ref) {
   final service = ref.watch(mediaPermissionServiceProvider);
   return service.checkPermission();
+});
+
+final backgroundSyncServiceProvider = Provider<BackgroundSyncService>((ref) {
+  return BackgroundSyncService();
 });
