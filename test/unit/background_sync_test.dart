@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:project_sift/infrastructure/background/background_sync_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('BackgroundSyncService Unit Tests', () {
     late BackgroundSyncService service;
 

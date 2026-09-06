@@ -25,10 +25,14 @@ class ProcessedMedia {
   });
 
   /// Releases temporary disk files when no longer needed.
-  Future<void> dispose() async {
+  /// Set [deleteThumbnail] to true to also purge the local thumbnail file.
+  Future<void> dispose({bool deleteThumbnail = false}) async {
     try {
       if (await compressedImageFile.exists()) {
         await compressedImageFile.delete();
+      }
+      if (deleteThumbnail && await thumbnailFile.exists()) {
+        await thumbnailFile.delete();
       }
     } catch (_) {}
   }
